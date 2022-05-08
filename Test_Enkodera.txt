@@ -46,6 +46,12 @@
 
 /* USER CODE BEGIN PV */
 
+  volatile uint32_t count;
+  volatile uint32_t old_count;
+  volatile uint32_t delta_count;
+  volatile float speed;
+  int time=1; //PRZELICZAĆ
+  float number = 150; // dla czasu 1ms
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,7 +62,16 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
+{
+    if(htim->Instance == htim2.Instance){
+    	delta_count = count-old_count;
+    	speed = delta_count/time;
+    	speed = speed*number;
+    	old_count = count;
 
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -89,10 +104,11 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_TIM1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Encoder_Start(&htim1,TIM_CHANNEL_ALL);
-  uint32_t count;
-  char msg[64];
+  HAL_TIM_Base_Start_IT(&htim2);
+  //char msg[64];
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -100,9 +116,7 @@ int main(void)
   while (1)
   {
 	  count=__HAL_TIM_GET_COUNTER(&htim1);
-	  sprintf((char*)msg, "Odczyt %d \n \r",count);
-	  HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg),1000);
-	  HAL_Delay(1000);
+	  HAL_Delay(0);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
