@@ -30,6 +30,7 @@
 /* USER CODE BEGIN PTD */
 char key;
 char tab[3];
+int number;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -57,29 +58,28 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 int analyze(char key){
 	int number;
-	if(key=='0')
+	if(key==0x30)
 		number=0;
-	else if(key=='1')
+	else if(key==0x31)
 		number=1;
-	else if(key=='2')
-		number=0;
-	else if(key=='3')
-		number=1;
-	else if(key=='4')
-		number=0;
-	else if(key=='5')
-		number=1;
-	else if(key=='6')
-		number=0;
-	else if(key=='7')
-		number=1;
-	else if(key=='8')
+	else if(key==0x32)
+		number=2;
+	else if(key==0x33)
+		number=3;
+	else if(key==0x34)
+		number=4;
+	else if(key==0x35)
+		number=5;
+	else if(key==0x36)
+		number=6;
+	else if(key==0x37)
+		number=7;
+	else if(key==0x38)
 		number=8;
-	else
+	else if(key==0x39)
 		number=9;
 
 }
-int number;
 /* USER CODE END 0 */
 
 /**
@@ -124,7 +124,10 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
 	  //key=KeyPad_WaitForKey(5000);
-	 key = KeyPad_WaitForKeyGetChar(5000);
+	 tab[0] = KeyPad_WaitForKeyGetChar(5000);
+	 tab[1] = KeyPad_WaitForKeyGetChar(5000);
+	 tab[2] = KeyPad_WaitForKeyGetChar(5000);
+	 number = analyze(tab[0])*100+analyze(tab[1])*10+analyze(tab[2]);
   }
   /* USER CODE END 3 */
 }
