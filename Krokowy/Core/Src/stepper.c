@@ -41,7 +41,7 @@ void stepper_set_angle(struct stepper_s *_stepper, direction _dir, uint32_t _spe
 	stepper_set_speed(_stepper, _speed);
 
 	_stepper->step_counter = 0;
-	_stepper->steps_to_count = _angle * (STEP_PER_REVOLUTION * MICRO_STEP) / 360;
+	_stepper->steps_to_count = _angle * (STEP_PER_REVOLUTION * MICRO_STEP)/200;
 
 	if(0 == _stepper->steps_to_count)
 	{

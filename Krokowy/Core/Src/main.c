@@ -1,24 +1,25 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
-  *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
+ * All rights reserved.</center></h2>
+ *
+ * This software component is licensed by ST under BSD 3-Clause license,
+ * the "License"; You may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at:
+ *                        opensource.org/licenses/BSD-3-Clause
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "usart.h"
 #include "tim.h"
 #include "gpio.h"
@@ -35,7 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SET_TABLE_SIZE	5
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,7 +47,26 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-struct stepper_s stepper = {0};
+// ADC
+	const uint32_t ADC_REG_MAX=0xfff; //12bit
+	const float ADC_VOLTAGE_MAX = 3.3; //[V]
+//	const uint32_t ADC_TIMEOUT= 100; //[ms]
+	uint32_t ADC_measurment=0;
+	float ADC_voltage = 0;
+	uint32_t ADC_voltage_mV=0;
+	int pwm=0;
+// SILNIK KROKOWY
+	struct stepper_s stepper = { 0 };
+	volatile int32_t count_stepper;
+// SILNIK DC
+	volatile int32_t count;
+	volatile int16_t speed;
+	volatile int16_t speed_prev;
+	float number = 15; // dla czasu 10ms
+// UART
+	char msg[64];
+	volatile int sign = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,7 +77,25 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == htim15.Instance) {
+		if (sign == 1) {
+			count = __HAL_TIM_GET_COUNTER(&htim4);
+			speed = number * count / 4; //obr min
+			__HAL_TIM_SET_COUNTER(&htim4, 0);
+		}
+		if (sign == -1) {
+			count = __HAL_TIM_GET_COUNTER(&htim4);
+			count = 65000 - count;
+			speed = -number * count / 4; //obr min
+			__HAL_TIM_SET_COUNTER(&htim4, 0);
+		}
+	}
+}
+int map(int x, int in_min, int in_max, int out_min, int out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 /* USER CODE END 0 */
 
 /**
@@ -88,83 +126,87 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_LPUART1_UART_Init();
-  MX_TIM1_Init();
   MX_TIM2_Init();
   MX_USART1_UART_Init();
+  MX_TIM17_Init();
+  MX_TIM15_Init();
+  MX_TIM20_Init();
+  MX_TIM4_Init();
   MX_TIM3_Init();
+  MX_LPUART1_UART_Init();
+  MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
- // HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
- // HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+	// HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+	// HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
 #if STEPPER_ANGLE_MODE == STEPPER_ANGLE_MODE_SLAVE_TIM
   stepper_init(&stepper, &htim2, TIM_CHANNEL_3, &htim1);
 
 #elif STEPPER_ANGLE_MODE == STEPPER_ANGLE_MODE_MANUAL
-  stepper_init(&stepper, &htim2, TIM_CHANNEL_3);
+	stepper_init(&stepper, &htim2, TIM_CHANNEL_3);
 #endif
+	direction dir = CW;
+// stepper_set_angle(&stepper, dir, 20,360);
+//stepper_set_continous(&stepper, dir, 10);
 
-  int32_t speed_table[SET_TABLE_SIZE] = {30, 20, -20, 10, 50};
-  int32_t angle_table[SET_TABLE_SIZE] = {30, 90, 45, 15, -180};
+//----------------------------------------SILNIK DC------------------------------------------
 
-  int i = 0;
-  uint32_t time_tick = HAL_GetTick();
-  uint32_t max_time = 2000;
-  uint32_t angle = 180, speed = 10;
- // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2,1000);
-  direction dir = CW;
-  stepper_set_angle(&stepper, dir, 10, 180);
-  //stepper_set_continous(&stepper, dir, 10);
-  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-  uint32_t count;
+	//timer do PWM DC
+	HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
+	//	__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 500);
+	// timer do przerwań- pomiar predkosci silnika dc
+	HAL_TIM_Base_Start_IT(&htim15);
+
+	// timer do enkodera DC
+	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+
+	// timer enkodera do krokowego
+	HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-    {
-	  count=__HAL_TIM_GET_COUNTER(&htim3);
-	  HAL_Delay(0);
+	while (1) {
+		// USTAWIANIE PWM PRZEZ ADC
+			  HAL_ADC_Start(&hadc3);
+			  HAL_ADC_PollForConversion(&hadc3, 100);
+			  ADC_measurment=HAL_ADC_GetValue(&hadc3);
+			  ADC_voltage = ((float)ADC_measurment/(float)ADC_REG_MAX)*ADC_VOLTAGE_MAX;
+			  ADC_voltage_mV = (uint32_t)(1000.0*ADC_voltage);
+			  pwm=map(ADC_voltage_mV,100,1550,0,100);
+			  __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pwm*10);
+			  count_stepper = __HAL_TIM_GET_COUNTER(&htim3);
 
-  	  if((HAL_GetTick() - time_tick) > max_time)
-  	  {
-  		  time_tick = HAL_GetTick();
+			  HAL_Delay(1000);
 
-//  		  if(angle_table[i] >= 0)
-//  		  {
-//  			  angle = angle_table[i];
-//  			  dir = CW;
-//  		  }
-//  		  else
-//  		  {
-//  			  angle = -angle_table[i];
-//  			  dir = CCW;
-//  		  }
+			  // KROKOWY NA PRZYCISK
 
-//  		  stepper_set_angle(&stepper, dir, 1, 180);
+			  if (HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) {
+				  __HAL_TIM_SET_COUNTER(&htim3, 0);
+				  stepper_set_angle(&stepper, dir, 10, 200); // ilosć krokow jako 4 argument
+			  }
 
-//  		  if(speed_table[i] >= 0)
-//  		  {
-//  			  speed = speed_table[i];
-//  			  dir = CW;
-//  		  }
-//  		  else
-//  		  {
-//  			  speed = -speed_table[i];
-//  			  dir = CCW;
-//  		  }
-//  		  stepper_set_continous(&stepper, dir, 10);
-//
-//  		  i++;
-//
-//  		  if(i >= SET_TABLE_SIZE)
-//  		  {
-//  			  i = 0;
-//  		  }
-  	  }
+			  if (HAL_GPIO_ReadPin(SWITCH1_GPIO_Port, SWITCH1_Pin)) {
+				  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+				  sign = 1;
+			  }
+			  else {
+				  sign = -1;
+				  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+			  }
+
+			  //UART WYSY�?ANIE NA TERMINAL
+			  //				sprintf((char*) msg, "%d ", count);
+			  //				HAL_UART_Transmit(&huart1, (uint8_t*) msg, strlen(msg), 1000);
+			  //				sprintf((char*) msg, "%d \r\n", speed);
+			  //				HAL_UART_Transmit(&huart1, (uint8_t*) msg, strlen(msg), 1000);
+
+			  // UART TEST
+			  sprintf((char*) msg, "%d \r\n", 12);
+			  HAL_UART_Transmit(&huart1, (uint8_t*) msg, 10, 1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    }
+	}
   /* USER CODE END 3 */
 }
 
@@ -213,9 +255,11 @@ void SystemClock_Config(void)
   }
   /** Initializes the peripherals clocks
   */
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_LPUART1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_LPUART1
+                              |RCC_PERIPHCLK_ADC345;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+  PeriphClkInit.Adc345ClockSelection = RCC_ADC345CLKSOURCE_SYSCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -232,14 +276,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	}
 }
 #elif STEPPER_ANGLE_MODE == STEPPER_ANGLE_MODE_MANUAL
-void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
-{
-	if(htim->Instance == stepper.timer.htim->Instance)
-	{
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == stepper.timer.htim->Instance) {
 		stepper.step_counter++;
 
-		if(stepper.step_counter >= stepper.steps_to_count)
-		{
+		if (stepper.step_counter >= stepper.steps_to_count) {
 			stepper_stop(&stepper);
 		}
 	}
@@ -254,11 +295,10 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1) {
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
