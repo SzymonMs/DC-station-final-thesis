@@ -59,19 +59,16 @@
 	float number = 15; // dla czasu 10ms
 // UART
 	char msg[64];
-	volatile int sign = 0;
 
-	static uint16_t cnt = 1; // Licznik wyslanych wiadomosci
-	uint16_t dataRozruch[5000];
+
 	uint8_t data[100]; // Tablica przechowujaca wysylana wiadomosc.
 	uint16_t size = 0;
 	uint8_t Received[10];
-	volatile float Kpw = 0.03f;
-	volatile float Kiw = 62.5f;
-	volatile float Kdw = 1.3f;
+	volatile float Kpw = 0.11f;
+	volatile float Kiw = 0.25f;
 	volatile float Kpi = 0.0f;
 	volatile float Kii = 5.0f;
-	volatile float Kdi = 1.6f;
+
 	volatile int WZZ = 2; //zadana predkosc obrotowa
 	volatile int KRK = 1; //zadana ilosc krokow
 	_Bool LogFlag=0;
@@ -96,13 +93,15 @@
 	float prevErrorI = 0.0f;
 	float prevIntW = 0.0f;
 	float prevErrorW = 0.0f;
-	uint16_t duty; // PWM %
-	volatile float setValueW = 400.0f; // value of omega- setpoint
+	volatile uint16_t duty; // PWM %
+	volatile float setValueW = 1000.0f; // value of omega- setpoint
 	volatile float setValueI = 500.0f; //value of I- setpoint
 	float Tp = 0.01f; //Sample time
 	volatile float Wmess; // zmierzona omega
 	volatile float Imess; // zmierzony prąd
-	float kFi = 1.5f; // stała elektromotoryczna napędu;
+	float kFi = 0.127f; // stała elektromotoryczna napędu;
+	volatile int REG=0;
+	volatile int PWM=0;
 
 /* USER CODE END PV */
 
@@ -116,20 +115,67 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM15) {
+
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==SET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==SET) {
+			htim17.Instance->CCR1 = 0;
+		}
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==RESET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==RESET) {
+			htim17.Instance->CCR1 = 0;
+		}
+
+
 		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==SET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==RESET) {
+//			count = __HAL_TIM_GET_COUNTER(&htim4);
+//			speed = number * count / 4; //obr min
+//
+//
+//			__HAL_TIM_SET_COUNTER(&htim4, 0);
+
+			if(REG==0)
+			{
+				htim17.Instance->CCR1 = duty;
+			}
+			if(REG==1)
+			{
+				TorqueControl();
+			}
+			if(REG==2)
+			{
+				CascadeControl();
+			}
+
+
+		}
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==RESET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==SET) {
+//			count = __HAL_TIM_GET_COUNTER(&htim4);
+//			count = 65000 - count;
+//			speed = -number * count / 4; //obr min
+//
+//			__HAL_TIM_SET_COUNTER(&htim4, 0);
+
+			//CascadeControl();
+		}
+		if(__HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4))
+				{
+			count = __HAL_TIM_GET_COUNTER(&htim4);
+						count = 65000 - count;
+						speed = -number * count / 4; //obr min
+
+						__HAL_TIM_SET_COUNTER(&htim4, 0);
+
+				}
+		else if(!__HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4))
+		{
 			count = __HAL_TIM_GET_COUNTER(&htim4);
 			speed = number * count / 4; //obr min
 
 
 			__HAL_TIM_SET_COUNTER(&htim4, 0);
 		}
-		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==RESET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==SET) {
-			count = __HAL_TIM_GET_COUNTER(&htim4);
-			count = 65000 - count;
-			speed = -number * count / 4; //obr min
 
-			__HAL_TIM_SET_COUNTER(&htim4, 0);
-		}
+
+
+
 		if(speed>5000 || speed<-5000)
 		{
 			speed_1=0;
@@ -144,7 +190,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 		if(LogFlag==1)
 					{
-							size = sprintf(data, "data %f  %d %f \r\n", current, speed_1, vbus);
+							size = sprintf(data, "data %.2f %d %.2f %d \r\n", current, speed_1, vbus/1000.0f, duty/100);
 							HAL_UART_Transmit(&huart2, data, size, 1000);
 					}
 		//uruchomic konwersje na przetworniku , przerwanie od konca konwersji
@@ -160,8 +206,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		{
 			Flaga=true;
 		}
-		TorqueControl();
-
+		//TorqueControl();
+//		CascadeControl();
 
 	}
 	if (htim->Instance == TIM2) {
@@ -170,7 +216,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	}
 
 	 if (htim->Instance == TIM3) {
-		size = sprintf(data, "parm %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f \r\n", cnt,setValueI,Kpw,Kiw,Kdw,Kpi,Kii,Kdi); // @suppress("Float formatting support")
+		size = sprintf(data, "parm %.2f %.2f %.2f %.2f %.2f %.2f \r\n", setValueI,setValueW,Kpw,Kiw,Kpi,Kii); // @suppress("Float formatting support")
 		HAL_UART_Transmit(&huart2, data, size, 1000);
 
 	}
@@ -195,6 +241,39 @@ void TorqueControl(){
 	}
 	htim17.Instance->CCR1 = duty; //Odpowiedni timer od PWM silnika musi mieć takie duty
 }
+void CascadeControl(){
+	Wmess = speed_1*3.14f/30.0f; //Tutaj mierzenie prędkości
+
+	float uW;
+	float uI;
+	float errorW2 = 0.16f*setValueW*3.14f/30.0f - Wmess;
+	float errorW = setValueW*3.14f/30.0f - Wmess;
+	//P omega
+	float uKpW = Kpw*errorW2;
+	//I omega
+	float errorSumW = errorW + prevErrorW + prevIntW;
+	prevErrorW = errorW;
+	float uKiW = errorSumW * Tp/2.0f* Kiw;
+	prevIntW = errorSumW;
+	uW = (uKpW + uKiW) / kFi; // wartość zadana dla regulatora prądu
+	Imess = current; // Tutaj mierzenie prądu
+	float errorI = uW - Imess; // pytanie jak się ma zmierzony prąd do uW do zbadania
+	//P prądu
+	float uKpI = Kpi*errorI;
+	//I prądu
+	float errorSumI = errorI + prevErrorI + prevIntI;
+	prevErrorI = errorI;
+	float uKiI = errorSumI * Tp/2.0f* Kii;
+	prevIntI = errorSumI;
+	uI = uKpI + uKiI;
+	duty = (uint16_t) uI; // pytanie czy to uI będzie w sensownych wartościach czy np tylko małe
+	if( duty > 9999 ){
+		duty = 9999;
+	}
+	htim17.Instance->CCR1 = duty; //Odpowiedni timer od PWM silnika musi mieć takie duty
+}
+
+
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == &huart2) {
@@ -228,13 +307,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				}
 			}
 			// jesli komenda dotyczy Kdw( wzmocnienie różniczkowania petli predkosci) to ustaw wartosc
-			if (Received[0] == 'K' && Received[1] == 'D' && Received[2] == 'W') {
-				//wpisanie wartosci do zmiennej
 
-				if (rx_n == 1) {
-					Kdw = value / 100.0f;
-				}
-			}
 
 			// jesli komenda dotyczy Kpi( wzmocnienie petli pradu) to ustaw wartosc
 			if (Received[0] == 'K' && Received[1] == 'P' && Received[2] == 'I') {
@@ -266,7 +339,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				//wpisanie wartosci do zmiennej
 
 				if (rx_n == 1) {
-					WZZ = value;
+					setValueW = value;
+				}
+			}
+			if (Received[0] == 'P' && Received[1] == 'W' && Received[2] == 'M') {
+				//wpisanie wartosci do zmiennej
+
+				if (rx_n == 1) {
+					duty=value*9999/100;
+					if( duty > 9999 ){
+							duty = 9999;
+						}
+
 				}
 			}
 
@@ -286,6 +370,20 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				if (rx_n == 1) {
 
 					LogFlag=true;
+
+				}
+			}
+			if (Received[0] == 'R' && Received[1] == 'E' && Received[2] == 'G') {
+				//wpisanie wartosci do zmiennej
+
+				if (rx_n == 1) {
+					if(value==0)
+						REG=0;
+					else if(value==1)
+						REG=1;
+					else if(value==2)
+						REG=2;
+
 
 				}
 			}
