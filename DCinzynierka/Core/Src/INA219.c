@@ -41,7 +41,7 @@ int16_t INA219_ReadCurrent_raw(INA219_t *ina219)
 
 int16_t INA219_ReadCurrent(INA219_t *ina219)
 {
-	int16_t result = INA219_ReadCurrent_raw(ina219);
+	int16_t result = INA219_ReadCurrent_raw(ina219)*2.0;
 
 	return (result / ina219_currentDivider_mA );
 }
@@ -78,7 +78,7 @@ void INA219_setConfig(INA219_t *ina219, uint16_t Config)
 void INA219_setCalibration_32V_2A(INA219_t *ina219)
 {
 	uint16_t config = INA219_CONFIG_BVOLTAGERANGE_32V |
-	             INA219_CONFIG_GAIN_8_320MV | INA219_CONFIG_BADCRES_12BIT |
+	             INA219_CONFIG_GAIN_8_320MV | INA219_CONFIG_BADCRES_12BIT_2S_1060US |
 				 INA219_CONFIG_SADCRES_12BIT_16S_8510US |
 	             INA219_CONFIG_MODE_SANDBVOLT_CONTINUOUS;
 

@@ -53,24 +53,22 @@
 
 // SILNIK DC
 	volatile int32_t count;
-	volatile int16_t speed;
+	volatile int16_t speed=0;
+	volatile int16_t speed_1=0; // do rysowania
 	volatile int16_t speed_prev;
 	float number = 15; // dla czasu 10ms
 // UART
 	char msg[64];
-	volatile int sign = 0;
 
-	static uint16_t cnt = 1; // Licznik wyslanych wiadomosci
-	uint16_t dataRozruch[5000];
+
 	uint8_t data[100]; // Tablica przechowujaca wysylana wiadomosc.
 	uint16_t size = 0;
 	uint8_t Received[10];
-	volatile float Kpw = 1.1f;
-	volatile float Kiw = 1.2f;
-	volatile float Kdw = 1.3f;
-	volatile float Kpi = 1.4f;
-	volatile float Kii = 1.5f;
-	volatile float Kdi = 1.6f;
+	volatile float Kpw = 0.11f;
+	volatile float Kiw = 0.25f;
+	volatile float Kpi = 0.0f;
+	volatile float Kii = 5.0f;
+
 	volatile int WZZ = 2; //zadana predkosc obrotowa
 	volatile int KRK = 1; //zadana ilosc krokow
 	_Bool LogFlag=0;
@@ -81,6 +79,29 @@
 	//pomiar pradu
 	INA219_t ina219;
 	volatile float vbus, vshunt, current;
+	volatile float current1 = 0.0f;
+	volatile float current2 = 0.0f;
+	volatile float currentObsv;
+	volatile float Tf = 0.2f;
+	//Wszystkie wartości z czapy
+	//Nastawy regulatora prądu
+
+	//Nastawy regulatora prędkości
+
+	//Warunki początkowe, okres, wypełnienie
+	float prevIntI = 0.0f;
+	float prevErrorI = 0.0f;
+	float prevIntW = 0.0f;
+	float prevErrorW = 0.0f;
+	volatile uint16_t duty; // PWM %
+	volatile float setValueW = 1000.0f; // value of omega- setpoint
+	volatile float setValueI = 500.0f; //value of I- setpoint
+	float Tp = 0.01f; //Sample time
+	volatile float Wmess; // zmierzona omega
+	volatile float Imess; // zmierzony prąd
+	float kFi = 0.127f; // stała elektromotoryczna napędu;
+	volatile int REG=0;
+	volatile int PWM=0;
 
 /* USER CODE END PV */
 
@@ -94,43 +115,166 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM15) {
-//		if (sign == 1) {
+
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==SET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==SET) {
+			htim17.Instance->CCR1 = 0;
+		}
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==RESET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==RESET) {
+			htim17.Instance->CCR1 = 0;
+		}
+
+
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==SET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==RESET) {
 //			count = __HAL_TIM_GET_COUNTER(&htim4);
 //			speed = number * count / 4; //obr min
+//
+//
 //			__HAL_TIM_SET_COUNTER(&htim4, 0);
-//		}
-//		if (sign == -1) {
+
+			if(REG==0)
+			{
+				htim17.Instance->CCR1 = duty;
+			}
+			if(REG==1)
+			{
+				TorqueControl();
+			}
+			if(REG==2)
+			{
+				CascadeControl();
+			}
+
+
+		}
+		if (HAL_GPIO_ReadPin(A_GPIO_Port, A_Pin)==RESET && HAL_GPIO_ReadPin(B_GPIO_Port, B_Pin)==SET) {
 //			count = __HAL_TIM_GET_COUNTER(&htim4);
 //			count = 65000 - count;
 //			speed = -number * count / 4; //obr min
+//
 //			__HAL_TIM_SET_COUNTER(&htim4, 0);
-//		}
-		count = __HAL_TIM_GET_COUNTER(&htim4);
-		speed = number * count / 4; //obr min
-		__HAL_TIM_SET_COUNTER(&htim4, 0);
+
+			//CascadeControl();
+		}
+		if(__HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4))
+				{
+			count = __HAL_TIM_GET_COUNTER(&htim4);
+						count = 65000 - count;
+						speed = -number * count / 4; //obr min
+
+						__HAL_TIM_SET_COUNTER(&htim4, 0);
+
+				}
+		else if(!__HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4))
+		{
+			count = __HAL_TIM_GET_COUNTER(&htim4);
+			speed = number * count / 4; //obr min
+
+
+			__HAL_TIM_SET_COUNTER(&htim4, 0);
+		}
+
+
+
+
+		if(speed>5000 || speed<-5000)
+		{
+			speed_1=0;
+		}
+		else
+			speed_1=speed;
+
+
+//		count = __HAL_TIM_GET_COUNTER(&htim4);
+//		speed = number * count / 4; //obr min
+//		__HAL_TIM_SET_COUNTER(&htim4, 0);
 
 		if(LogFlag==1)
 					{
-							size = sprintf(data, "{ \"cnt1\" : %d , \"cnt2\" : %d  } \r\n", cnt, WZZ);
+							size = sprintf(data, "data %.2f %d %.2f %d \r\n", current, speed_1, vbus/1000.0f, duty/100);
 							HAL_UART_Transmit(&huart2, data, size, 1000);
 					}
+		//uruchomic konwersje na przetworniku , przerwanie od konca konwersji
+
+
+
+
+
 	//	vbus = INA219_ReadBusVoltage(&ina219);
-	//	current = INA219_ReadCurrent(&ina219);
+		//current = INA219_ReadCurrent(&ina219);
 	//	vshunt = INA219_ReadShuntVolage(&ina219);
 		if(!Flaga2)
 		{
 			Flaga=true;
 		}
+		//TorqueControl();
+//		CascadeControl();
+
+	}
+	if (htim->Instance == TIM2) {
+		//HAL_GPIO_TogglePin(TEST_GPIO_Port, TEST_Pin);
+		//current = INA219_ReadCurrent(&ina219);
 	}
 
-
 	 if (htim->Instance == TIM3) {
-		size = sprintf(data, "parm %d %d %.2f %.2f %.2f %.2f %.2f %.2f \r\n", cnt,WZZ,Kpw,Kiw,Kdw,Kpi,Kii,Kdi); // @suppress("Float formatting support")
+		size = sprintf(data, "parm %.2f %.2f %.2f %.2f %.2f %.2f \r\n", setValueI,setValueW,Kpw,Kiw,Kpi,Kii); // @suppress("Float formatting support")
 		HAL_UART_Transmit(&huart2, data, size, 1000);
 
 	}
 
 }
+
+void TorqueControl(){
+	float uI;
+	Imess = current; //Pomiar prądu
+	float errorI = setValueI - Imess; // pytanie jak się ma zmierzony prąd do uW do zbadania
+	//P prądu
+	float uKpI = Kpi*errorI;
+	//I prądu
+	float errorSumI = errorI + prevErrorI + prevIntI;
+	prevErrorI = errorI;
+	float uKiI = errorSumI * Tp/2.0f* Kii;
+	prevIntI = errorSumI;
+	uI = uKpI + uKiI;
+	duty = (uint16_t) uI; // pytanie czy to uI będzie w sensownych wartościach czy np tylko małe
+	if( duty > 9999 ){
+		duty = 9999;
+	}
+	htim17.Instance->CCR1 = duty; //Odpowiedni timer od PWM silnika musi mieć takie duty
+}
+void CascadeControl(){
+	Wmess = speed_1*3.14f/30.0f; //Tutaj mierzenie prędkości
+
+	float uW;
+	float uI;
+	float errorW2 = 0.16f*setValueW*3.14f/30.0f - Wmess;
+	float errorW = setValueW*3.14f/30.0f - Wmess;
+	//P omega
+	float uKpW = Kpw*errorW2;
+	//I omega
+	float errorSumW = errorW + prevErrorW + prevIntW;
+	prevErrorW = errorW;
+	float uKiW = errorSumW * Tp/2.0f* Kiw;
+	prevIntW = errorSumW;
+	uW = (uKpW + uKiW) / kFi; // wartość zadana dla regulatora prądu
+	Imess = current; // Tutaj mierzenie prądu
+	float errorI = uW - Imess; // pytanie jak się ma zmierzony prąd do uW do zbadania
+	//P prądu
+	float uKpI = Kpi*errorI;
+	//I prądu
+	float errorSumI = errorI + prevErrorI + prevIntI;
+	prevErrorI = errorI;
+	float uKiI = errorSumI * Tp/2.0f* Kii;
+	prevIntI = errorSumI;
+	uI = uKpI + uKiI;
+	duty = (uint16_t) uI; // pytanie czy to uI będzie w sensownych wartościach czy np tylko małe
+	if( duty > 9999 ){
+		duty = 9999;
+	}
+	htim17.Instance->CCR1 = duty; //Odpowiedni timer od PWM silnika musi mieć takie duty
+}
+
+
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == &huart2) {
 
@@ -163,13 +307,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				}
 			}
 			// jesli komenda dotyczy Kdw( wzmocnienie różniczkowania petli predkosci) to ustaw wartosc
-			if (Received[0] == 'K' && Received[1] == 'D' && Received[2] == 'W') {
-				//wpisanie wartosci do zmiennej
 
-				if (rx_n == 1) {
-					Kdw = value / 100.0f;
-				}
-			}
 
 			// jesli komenda dotyczy Kpi( wzmocnienie petli pradu) to ustaw wartosc
 			if (Received[0] == 'K' && Received[1] == 'P' && Received[2] == 'I') {
@@ -188,11 +326,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				}
 			}
 			// jesli komenda dotyczy Kdw( wzmocnienie różniczkowania petli pradu) to ustaw wartosc
-			if (Received[0] == 'K' && Received[1] == 'D' && Received[2] == 'I') {
+			if (Received[0] == 'I' && Received[1] == 'Z' && Received[2] == 'Z') {
 				//wpisanie wartosci do zmiennej
 
 				if (rx_n == 1) {
-					Kdi = value / 100.0f;
+					setValueI = value/10.0f;
 				}
 			}
 
@@ -201,7 +339,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				//wpisanie wartosci do zmiennej
 
 				if (rx_n == 1) {
-					WZZ = value;
+					setValueW = value;
+				}
+			}
+			if (Received[0] == 'P' && Received[1] == 'W' && Received[2] == 'M') {
+				//wpisanie wartosci do zmiennej
+
+				if (rx_n == 1) {
+					duty=value*9999/100;
+					if( duty > 9999 ){
+							duty = 9999;
+						}
+
 				}
 			}
 
@@ -210,7 +359,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				//wpisanie wartosci do zmiennej
 
 				if (rx_n == 1) {
-					KRK = value;
+
 					LogFlag=false;
 
 				}
@@ -219,8 +368,22 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				//wpisanie wartosci do zmiennej
 
 				if (rx_n == 1) {
-					KRK = value;
+
 					LogFlag=true;
+
+				}
+			}
+			if (Received[0] == 'R' && Received[1] == 'E' && Received[2] == 'G') {
+				//wpisanie wartosci do zmiennej
+
+				if (rx_n == 1) {
+					if(value==0)
+						REG=0;
+					else if(value==1)
+						REG=1;
+					else if(value==2)
+						REG=2;
+
 
 				}
 			}
@@ -261,22 +424,23 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_I2C1_Init();
   MX_TIM15_Init();
   MX_TIM17_Init();
   MX_DMA_Init();
   MX_USART3_UART_Init();
   MX_TIM4_Init();
-
+  MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_TIM3_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 	//timer do PWM DC
 	HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1);
-		__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 5000);
+		__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 9999);
 	// timer do przerwań- pomiar predkosci silnika dc
 	HAL_TIM_Base_Start_IT(&htim15);
 	HAL_TIM_Base_Start_IT(&htim3);
+	HAL_TIM_Base_Start_IT(&htim2);
 	// timer do enkodera DC
 	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
 	HAL_UART_Receive_DMA (&huart2, Received, 8);
@@ -301,10 +465,15 @@ int main(void)
 		  vbus = INA219_ReadBusVoltage(&ina219);
 		  current = INA219_ReadCurrent(&ina219);
 		  vshunt = INA219_ReadShuntVolage(&ina219);
+//		  current2 = current1;
+//		  current1 = current;
+//		  currentObsv = (Tf)/(Tf+Tp)*current2 + (Tp)/(Tf+Tp)*current1;
 		  Flaga=false;
 		  Flaga2=false;
 	  }
-	  	  //HAL_Delay(10);
+	  //current = INA219_ReadCurrent(&ina219);
+	 // vbus = INA219_ReadBusVoltage(&ina219);
+	  	  HAL_Delay(0);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

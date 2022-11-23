@@ -63,6 +63,12 @@ void Error_Handler(void);
 #define B1_EXTI_IRQn EXTI15_10_IRQn
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
+#define TEST_Pin GPIO_PIN_5
+#define TEST_GPIO_Port GPIOC
+#define B_Pin GPIO_PIN_7
+#define B_GPIO_Port GPIOC
+#define A_Pin GPIO_PIN_9
+#define A_GPIO_Port GPIOA
 #define T_SWDIO_Pin GPIO_PIN_13
 #define T_SWDIO_GPIO_Port GPIOA
 #define T_SWCLK_Pin GPIO_PIN_14
