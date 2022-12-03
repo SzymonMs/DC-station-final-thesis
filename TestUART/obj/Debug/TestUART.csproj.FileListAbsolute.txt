@@ -1,0 +1,15 @@
+C:\Users\szymo\source\repos\TestUART\bin\Debug\TestUART.exe.config
+C:\Users\szymo\source\repos\TestUART\bin\Debug\TestUART.exe
+C:\Users\szymo\source\repos\TestUART\bin\Debug\TestUART.pdb
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.csproj.AssemblyReference.cache
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.csproj.SuggestedBindingRedirects.cache
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.Form1.resources
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.Properties.Resources.resources
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.csproj.GenerateResource.cache
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.csproj.CoreCompileInputs.cache
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.exe
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.pdb
+C:\Users\szymo\source\repos\TestUART\bin\Debug\TestUART.exe.manifest
+C:\Users\szymo\source\repos\TestUART\bin\Debug\TestUART.application
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.exe.manifest
+C:\Users\szymo\source\repos\TestUART\obj\Debug\TestUART.application
