@@ -26,11 +26,13 @@ namespace TestUART
         double dataI;
         double dataW;
         int signOfDataMax = 8;
+        static string pathCurrent = @"c:\DanePomiarowe";
 
-        string fullPathI = @"C:\Temp\pomiarI.csv";
-        string fullPathW = @"C:\Temp\pomiarW.csv";
-        string fullPathU = @"C:\Temp\pomiarU.csv";
-        string fullPathDuty = @"C:\Temp\pomiarDuty.csv";
+
+        string fullPathI =  pathCurrent + @"\pomiarI.csv";
+        string fullPathW = pathCurrent + @"\pomiarW.csv";
+        string fullPathU = pathCurrent+ @"\pomiarU.csv";
+        string fullPathDuty = pathCurrent+ @"\pomiarDuty.csv";
 
         public Form1()
         {
@@ -52,6 +54,11 @@ namespace TestUART
                 "np. KPW12345 ustawia wartość KPW na 123.45, KII00989 ustawia wartość KII na 9.89.\r\n" +
                 "Analogicznie ustawiać pozostałe nastawy.\r\n\r\n" +
                 "Aby obserwować przebiegi prądu i prędkości, w zakładce pomiary, należy włączyć rejestrację danych!";
+            if (!Directory.Exists(pathCurrent))
+            {
+                Directory.CreateDirectory(pathCurrent);
+
+            }
             System.IO.File.WriteAllText(fullPathU, string.Empty);
             System.IO.File.WriteAllText(fullPathI, string.Empty);
             System.IO.File.WriteAllText(fullPathW, string.Empty);
@@ -140,7 +147,7 @@ namespace TestUART
             string[] tab;
             tab = dataRecived.Split(' ');
             tBoxRecive.Text = tab[0];
-            if (tab[0] == "parm")
+            if (tab[0] == "p")
             {
                 textBox1.Text = tab[1];
                 textBox2.Text = tab[2];
@@ -163,7 +170,7 @@ namespace TestUART
                 }
 
             }
-            else if (tab[0] == "data")
+            else if (tab[0] == "d")
             {
                 textBox9.Text = tab[1]; //i(t)
                 textBox10.Text = tab[2]; //w(t)
@@ -172,19 +179,19 @@ namespace TestUART
 
                 using (StreamWriter sw = File.AppendText(fullPathI))
                 {
-                    sw.WriteLine(time.ToString("0.00") + " " + textBox9.Text);
+                    sw.WriteLine(time.ToString("0.00") + "," + textBox9.Text);
                 }
                 using (StreamWriter sw = File.AppendText(fullPathW))
                 {
-                    sw.WriteLine(time.ToString("0.00") + " " + textBox10.Text);
+                    sw.WriteLine(time.ToString("0.00") + "," + textBox10.Text);
                 }
                 using (StreamWriter sw = File.AppendText(fullPathU))
                 {
-                    sw.WriteLine(time.ToString("0.00") + " " + textBox11.Text);
+                    sw.WriteLine(time.ToString("0.00") + "," + textBox11.Text);
                 }
                 using (StreamWriter sw = File.AppendText(fullPathDuty))
                 {
-                    sw.WriteLine(time.ToString("0.00") + " " + textBox12.Text);
+                    sw.WriteLine(time.ToString("0.00") + "" + textBox12.Text);
                 }
 
                 dataI = double.Parse(tab[1]) / 1000.0;
