@@ -1,0 +1,77 @@
+volatile float Kpw = 1.0f;
+volatile float Kiw = 0.01f;
+volatile float Kpi = 0.07f;
+volatile float Kii = 5.0f;
+float prevIntI = 0.0f;
+float prevErrorI = 0.0f;
+float prevIntW = 0.0f;
+float prevErrorW = 0.0f;
+volatile uint16_t duty; // PWM %
+volatile uint16_t duty2; // PWM %
+volatile float setValueW = 1000.0f; // value of omega- setpoint
+volatile float setValueI = 500.0f; //value of I- setpoint
+float Tp = 0.01f; //Sample time
+volatile float Wmess; // zmierzona omega
+volatile float Imess; // zmierzony prąd
+float kFi = 0.127f; // stała elektromotoryczna napędu;
+
+void TorqueControl() {
+	Tp = 0.001;
+	float uI;
+	Imess = current;
+	float errorI = setValueI - Imess;
+	//P prądu
+	float uKpI = Kpi * errorI;
+	//I prądu
+	float errorSumI = errorI + prevErrorI + prevIntI;
+	prevErrorI = errorI;
+	float uKiI = errorSumI * Tp / 2.0f * Kii;
+	prevIntI = errorSumI;
+	uI = uKpI + uKiI;
+	duty2 = (uint16_t) uI;
+	if (duty2 > 9999) {
+		duty2 = 9999;
+	}
+	htim17.Instance->CCR1 = duty2;
+}
+void CascadeControl() {
+	Tp=0.01;
+	Wmess = speed_1 * 3.14f / 30.0f;
+	if (Wmess < 0) {
+		Wmess = -speed_1 * 3.14f / 30.0f;
+	}
+
+
+	float uI;
+	float errorW2 = setValueW * 3.14f / 30.0f - Wmess;
+	float errorW = setValueW * 3.14f / 30.0f - Wmess;
+	//P omega
+	float uKpW = Kpw * errorW2;
+	//I omega
+	float errorSumW = errorW + prevErrorW + prevIntW;
+	prevErrorW = errorW;
+	float uKiW = errorSumW * Tp / 2.0f * Kiw;
+	prevIntW = errorSumW;
+	uW = (uKpW + uKiW) / kFi ;
+	if(uW>3000.0f)
+	{
+		uW=3000.0f;
+	}
+
+
+	Imess = currentW/1000.0f;
+	float errorI = uW - Imess;
+	//P prądu
+	float uKpI = Kpi * errorI;
+	//I prądu
+	float errorSumI = errorI + prevErrorI + prevIntI;
+	prevErrorI = errorI;
+	float uKiI = errorSumI * Tp / 2.0f * Kii;
+	prevIntI = errorSumI;
+	uI = uKpI + uKiI;
+	duty = (uint16_t) uI;
+	if (duty > 9999) {
+		duty = 9999;
+	}
+	htim17.Instance->CCR1 = duty;
+}
