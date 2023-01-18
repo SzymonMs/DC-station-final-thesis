@@ -15,6 +15,7 @@ volatile float Wmess; // zmierzona omega
 volatile float Imess; // zmierzony prąd
 float kFi = 0.127f; // stała elektromotoryczna napędu;
 
+
 void TorqueControl() {
 	Tp = 0.001;
 	float uI;
@@ -41,26 +42,31 @@ void CascadeControl() {
 		Wmess = -speed_1 * 3.14f / 30.0f;
 	}
 
-
 	float uI;
-	float errorW2 = setValueW * 3.14f / 30.0f - Wmess;
 	float errorW = setValueW * 3.14f / 30.0f - Wmess;
 	//P omega
-	float uKpW = Kpw * errorW2;
+	float uKpW = Kpw * errorW;
+
 	//I omega
-	float errorSumW = errorW + prevErrorW + prevIntW;
-	prevErrorW = errorW;
-	float uKiW = errorSumW * Tp / 2.0f * Kiw;
-	prevIntW = errorSumW;
-	uW = (uKpW + uKiW) / kFi ;
-	if(uW>3000.0f)
+	if(errorW<0.1* setValueW * 3.14f / 30.0f)
 	{
-		uW=3000.0f;
+		float errorSumW = errorW + prevErrorW + prevIntW;
+		prevErrorW = errorW;
+		float uKiW = errorSumW * Tp / 2.0f * Kiw;
+		prevIntW = errorSumW;
+		uW = (uKpW + uKiW) / kFi ;
+	}
+	else
+		uW=uKpW/kFi;
+
+	if(uW>1000.0f)
+	{
+		uW=1000.0f;
 	}
 
 
-	Imess = currentW/1000.0f;
-	float errorI = uW - Imess;
+	Imess = currentW/1000.0f; // Tutaj mierzenie prądu
+	float errorI = uW - Imess; // pytanie jak się ma zmierzony prąd do uW do zbadania
 	//P prądu
 	float uKpI = Kpi * errorI;
 	//I prądu
@@ -69,9 +75,9 @@ void CascadeControl() {
 	float uKiI = errorSumI * Tp / 2.0f * Kii;
 	prevIntI = errorSumI;
 	uI = uKpI + uKiI;
-	duty = (uint16_t) uI;
+	duty = (uint16_t) uI; // pytanie czy to uI będzie w sensownych wartościach czy np tylko małe
 	if (duty > 9999) {
 		duty = 9999;
 	}
-	htim17.Instance->CCR1 = duty;
+	htim17.Instance->CCR1 = duty; //Odpowiedni timer od PWM silnika musi mieć takie duty
 }
